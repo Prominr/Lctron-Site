@@ -1,19 +1,8 @@
 [build]
   command = "npm run build"
-  publish = ".next"
+  publish = "out"
 
 [build.environment]
+  NETLIFY_NEXT_PLUGIN_SKIP         = "true"
   NODE_VERSION                     = "20"
   NEXT_PUBLIC_GOOGLE_CLIENT_ID     = "631574178472-imq0mlh3hopqmpnac68f3i8hhiqjb9jc.apps.googleusercontent.com"
-
-[[redirects]]
-  from   = "/.netlify/functions/check-premium"
-  to     = "/api/check-premium"
-  status = 200
-  force  = true
-
-[[redirects]]
-  from   = "/.netlify/functions/stripe-webhook"
-  to     = "/api/stripe-webhook"
-  status = 200
-  force  = true
