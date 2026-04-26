@@ -12,6 +12,37 @@ const STORE = 'lctron-users';
 const OWNER_EMAIL = 'omariirvin44@gmail.com';
 const SALT = 'lctron-salt-2024';
 const DEFAULT_SITE_ID = 'ab849e15-836d-4b57-9c2f-347b58a40b78';
+const TRIAL_DAYS = 3;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// Compute the user's trial state. Anchor: explicit `trialStart` if set,
+// otherwise `createdAt`. Premium users still get a `trial` object but
+// `active` will be false (premium supersedes trial).
+function computeTrial(user) {
+  if (!user) return null;
+  const anchor = user.trialStart || user.createdAt;
+  if (!anchor) return null;
+  const startMs = Date.parse(anchor);
+  if (Number.isNaN(startMs)) return null;
+  const endMs = startMs + TRIAL_DAYS * DAY_MS;
+  const now = Date.now();
+  return {
+    start: new Date(startMs).toISOString(),
+    end: new Date(endMs).toISOString(),
+    daysLeft: Math.max(0, Math.ceil((endMs - now) / DAY_MS)),
+    active: now < endMs && !user.isPremium,
+    expired: now >= endMs,
+  };
+}
+
+// Pick the earliest of two ISO timestamps. Used so that a localStorage
+// trialStart from the web (if older than the server's createdAt) is
+// preserved rather than reset.
+function earlierIso(a, b) {
+  if (!a) return b;
+  if (!b) return a;
+  return Date.parse(a) <= Date.parse(b) ? a : b;
+}
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -111,7 +142,7 @@ export default async function handler(request) {
     const isPremium = key === OWNER_EMAIL.toLowerCase();
     const user = { name: (name || '').trim() || key.split('@')[0], email: key, passwordHash, isPremium, createdAt: new Date().toISOString() };
     await putUser(key, user);
-    return json({ success: true, user: { name: user.name, email: user.email, isPremium, picture: null } });
+    return json({ success: true, user: { name: user.name, email: user.email, isPremium, picture: null, createdAt: user.createdAt, trial: computeTrial(user) } });
   }
 
   // ── LOGIN ───────────────────────────────────────────────────────────────────
@@ -132,14 +163,28 @@ export default async function handler(request) {
     if (!user && migrateLocal) {
       const passwordHash = await hashPassword(password);
       user = { name: migrateLocal.name || key.split('@')[0], email: key, passwordHash, isPremium: !!migrateLocal.isPremium, createdAt: migrateLocal.createdAt || new Date().toISOString(), picture: migrateLocal.picture || null };
+      // Preserve an earlier trial start if the migrating client already had one.
+      if (migrateLocal.trialStart) user.trialStart = earlierIso(migrateLocal.trialStart, user.createdAt);
       await putUser(key, user);
     }
     
     if (!user) return json({ success: false, error: 'No account found with this email. Please sign up first.' });
     const hash = await hashPassword(password);
     if (user.passwordHash !== hash) return json({ success: false, error: 'Incorrect password. Please try again.' });
+
+    // If the existing remote user has no trialStart yet but the client is sending one,
+    // adopt the earlier of the two so we never accidentally extend trials by re-logins,
+    // and never accidentally reset a user's already-running trial.
+    if (migrateLocal && migrateLocal.trialStart) {
+      const newStart = earlierIso(migrateLocal.trialStart, user.trialStart || user.createdAt);
+      if (newStart !== (user.trialStart || user.createdAt)) {
+        user.trialStart = newStart;
+        await putUser(key, user);
+      }
+    }
+
     const isPremium = key === OWNER_EMAIL.toLowerCase() || !!user.isPremium;
-    return json({ success: true, user: { name: user.name, email: user.email, isPremium, picture: user.picture || null } });
+    return json({ success: true, user: { name: user.name, email: user.email, isPremium, picture: user.picture || null, createdAt: user.createdAt, trial: computeTrial(user) } });
   }
 
   // ── GOOGLE (OAuth sign-in / auto-register) ──────────────────────────────────
@@ -160,7 +205,7 @@ export default async function handler(request) {
       if (isPremium && !user.isPremium) { user.isPremium = true; changed = true; }
       if (changed) await putUser(key, user);
     }
-    return json({ success: true, user: { name: user.name, email: user.email, isPremium: isPremium || !!user.isPremium, picture: user.picture || null } });
+    return json({ success: true, user: { name: user.name, email: user.email, isPremium: isPremium || !!user.isPremium, picture: user.picture || null, createdAt: user.createdAt, trial: computeTrial(user) } });
   }
 
   // ── SEND-RESET (forgot password step 1) ─────────────────────────────────────

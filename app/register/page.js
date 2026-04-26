@@ -81,7 +81,8 @@ export default function RegisterPage() {
         const existing = getStoredUsers().find(
           (u) => u.email.toLowerCase() === gUser.email.toLowerCase(),
         );
-        const trialStart = existing?.trialStart || new Date().toISOString();
+        const serverTrialStart = remote?.user?.trial?.start || remote?.user?.createdAt;
+        const trialStart = serverTrialStart || existing?.trialStart || new Date().toISOString();
         
         if (remote.success && remote.user) {
           setStoredUser({
@@ -90,6 +91,7 @@ export default function RegisterPage() {
             picture: remote.user.picture || gUser.picture,
             isPremium: remote.user.isPremium || false,
             trialStart,
+            trial: remote.user.trial || null,
           });
         } else {
           setStoredUser({
@@ -155,7 +157,9 @@ export default function RegisterPage() {
       });
 
       if (remote.success && remote.user) {
-        const now = new Date().toISOString();
+        // Server is authoritative for createdAt + trial — use what it returns.
+        const serverCreated = remote.user.createdAt || new Date().toISOString();
+        const serverTrialStart = remote.user.trial?.start || serverCreated;
         const hash = await hashPassword(form.password);
         
         const newUser = {
@@ -163,8 +167,8 @@ export default function RegisterPage() {
           email: remote.user.email,
           password: hash,
           isPremium: remote.user.isPremium || false,
-          createdAt: now,
-          trialStart: now,
+          createdAt: serverCreated,
+          trialStart: serverTrialStart,
         };
         
         setStoredUsers([...existingUsers.filter(u => u.email.toLowerCase() !== emailKey), newUser]);
@@ -173,8 +177,9 @@ export default function RegisterPage() {
           email: remote.user.email,
           picture: remote.user.picture || null,
           isPremium: remote.user.isPremium || false,
-          createdAt: now,
-          trialStart: now,
+          createdAt: serverCreated,
+          trialStart: serverTrialStart,
+          trial: remote.user.trial || null,
         });
         
         router.push('/account');

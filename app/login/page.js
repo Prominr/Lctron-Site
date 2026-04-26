@@ -58,7 +58,9 @@ export default function LoginPage() {
         const existing = getStoredUsers().find(
           (u) => u.email.toLowerCase() === gUser.email.toLowerCase(),
         );
-        const trialStart = existing?.trialStart || new Date().toISOString();
+        // Prefer server-returned trial.start (authoritative) over local.
+        const serverTrialStart = remote?.user?.trial?.start || remote?.user?.createdAt;
+        const trialStart = serverTrialStart || existing?.trialStart || new Date().toISOString();
         
         if (remote.success && remote.user) {
           setStoredUser({
@@ -67,6 +69,7 @@ export default function LoginPage() {
             picture: remote.user.picture || gUser.picture,
             isPremium: remote.user.isPremium || false,
             trialStart,
+            trial: remote.user.trial || null,
           });
         } else {
           setStoredUser({
@@ -103,16 +106,24 @@ export default function LoginPage() {
 
     try {
       const emailKey = form.email.trim().toLowerCase();
+      const _localTrialStart = getStoredUsers().find(
+        (u) => u.email.toLowerCase() === form.email.toLowerCase().trim()
+      )?.trialStart || null;
       const remote = await authFetch({
         action: 'login',
         email: form.email.trim(),
         password: form.password,
+        ...(_localTrialStart ? { migrateLocal: { trialStart: _localTrialStart } } : {}),
       });
 
+      // If we have a local trialStart from a previous browser session, send it
+      // up so the server can preserve the earlier of the two (anti-reset).
+      const localTrialStart = getStoredUsers().find(
+        (u) => u.email.toLowerCase() === emailKey
+      )?.trialStart || null;
+
       if (remote.success && remote.user) {
-        const trialStart = getStoredUsers().find(
-          (u) => u.email.toLowerCase() === emailKey
-        )?.trialStart || new Date().toISOString();
+        const trialStart = remote.user.trial?.start || remote.user.createdAt || localTrialStart || new Date().toISOString();
         
         setStoredUser({
           username: remote.user.name,
@@ -120,6 +131,7 @@ export default function LoginPage() {
           picture: remote.user.picture || null,
           isPremium: remote.user.isPremium || false,
           trialStart,
+          trial: remote.user.trial || null,
         });
         router.push('/account');
         return;
@@ -141,6 +153,8 @@ export default function LoginPage() {
               isPremium: localUser.isPremium,
               createdAt: localUser.createdAt,
               picture: localUser.picture || null,
+              // Forward existing trialStart so the server preserves it.
+              trialStart: localUser.trialStart || null,
             },
           });
           if (mig.success && mig.user) {
@@ -149,7 +163,8 @@ export default function LoginPage() {
               email: mig.user.email,
               picture: mig.user.picture || null,
               isPremium: mig.user.isPremium || false,
-              trialStart: localUser.trialStart || new Date().toISOString(),
+              trialStart: mig.user.trial?.start || mig.user.createdAt || localUser.trialStart || new Date().toISOString(),
+              trial: mig.user.trial || null,
             });
             router.push('/account');
             return;
