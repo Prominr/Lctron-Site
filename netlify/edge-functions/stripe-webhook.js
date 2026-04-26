@@ -14,45 +14,33 @@ async function verifyStripeSignature(rawBody, sigHeader, secret) {
     const parts = sigHeader.split(',');
     const ts = parts.find((p) => p.startsWith('t=')).slice(2);
     const v1 = parts.find((p) => p.startsWith('v1=')).slice(3);
-
     const enc = new TextEncoder();
     const key = await crypto.subtle.importKey(
-      'raw',
-      enc.encode(secret),
-      { name: 'HMAC', hash: 'SHA-256' },
-      false,
-      ['sign']
+      'raw', enc.encode(secret),
+      { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
     );
     const hmacBytes = await crypto.subtle.sign('HMAC', key, enc.encode(`${ts}.${rawBody}`));
     const hmacHex = Array.from(new Uint8Array(hmacBytes))
-      .map((b) => b.toString(16).padStart(2, '0'))
-      .join('');
-
+      .map((b) => b.toString(16).padStart(2, '0')).join('');
     return timingSafeEqual(hmacHex, v1);
   } catch {
     return false;
   }
 }
 
-function getBlobCtx() {
-  const raw = Deno.env.get('NETLIFY_BLOBS_CONTEXT');
-  if (!raw) return null;
-  try {
-    return JSON.parse(atob(raw));
-  } catch {
-    return null;
-  }
-}
-
-async function blobSet(key, value) {
-  const ctx = getBlobCtx();
-  if (!ctx) throw new Error('NETLIFY_BLOBS_CONTEXT not available');
-  const url = `${ctx.edgeURL}/${ctx.siteID}/${STORE}/${encodeURIComponent(key)}`;
+async function blobPut(email, value) {
+  const token =
+    Deno.env.get('NETLIFY_API_TOKEN') ||
+    Deno.env.get('Netlify_API_TOKEN') ||
+    '';
+  const siteId = Deno.env.get('NETLIFY_BLOBS_SITE_ID') || 'ab849e15-836d-4b57-9c2f-347b58a40b78';
+  if (!token) throw new Error('Netlify API token not set');
+  const url = `https://api.netlify.com/api/v1/blobs/${siteId}/${STORE}/${encodeURIComponent(email)}`;
   const res = await fetch(url, {
     method: 'PUT',
     body: value,
     headers: {
-      Authorization: `Bearer ${ctx.token}`,
+      Authorization: `Bearer ${token}`,
       'Content-Type': 'text/plain; charset=utf-8',
     },
   });
@@ -72,8 +60,7 @@ export default async function handler(request) {
     const valid = await verifyStripeSignature(rawBody, sigHeader, webhookSecret);
     if (!valid) {
       return new Response(JSON.stringify({ error: 'Invalid signature' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
+        status: 400, headers: { 'Content-Type': 'application/json' },
       });
     }
   }
@@ -83,8 +70,7 @@ export default async function handler(request) {
     event = JSON.parse(rawBody);
   } catch {
     return new Response(JSON.stringify({ error: 'Invalid JSON' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' },
+      status: 400, headers: { 'Content-Type': 'application/json' },
     });
   }
 
@@ -98,11 +84,10 @@ export default async function handler(request) {
 
     if (email) {
       try {
-        await blobSet(email, 'true');
+        await blobPut(email, 'true');
       } catch (e) {
-        return new Response(JSON.stringify({ error: 'Storage error' }), {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' },
+        return new Response(JSON.stringify({ error: 'Storage error', detail: e.message }), {
+          status: 500, headers: { 'Content-Type': 'application/json' },
         });
       }
     }

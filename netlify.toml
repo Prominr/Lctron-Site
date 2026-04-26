@@ -6,3 +6,7 @@
   NETLIFY_NEXT_PLUGIN_SKIP         = "true"
   NODE_VERSION                     = "20"
   NEXT_PUBLIC_GOOGLE_CLIENT_ID     = "631574178472-imq0mlh3hopqmpnac68f3i8hhiqjb9jc.apps.googleusercontent.com"
+  # NETLIFY_API_TOKEN, NETLIFY_BLOBS_SITE_ID, LCTRON_EMAIL_APP_PASSWORD: set in Netlify UI (Site settings → Environment variables). Do not commit secrets.
+
+[context.production.environment]
+  NETLIFY_BLOBS_SITE_ID            = "ab849e15-836d-4b57-9c2f-347b58a40b78"

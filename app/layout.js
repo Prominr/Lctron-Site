@@ -11,7 +11,7 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body>
+      <body className="noise site-body-gradient">
         <Providers>{children}</Providers>
       </body>
     </html>

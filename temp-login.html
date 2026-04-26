@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lctron - Login (Temporary)</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #090910;
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            background: #111;
+            border: 1px solid #222;
+            border-radius: 16px;
+            padding: 40px;
+            width: 100%;
+            max-width: 400px;
+        }
+        .logo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 30px;
+            font-size: 24px;
+            font-weight: bold;
+        }
+        .logo span:first-child { color: #e03030; }
+        .logo span:last-child { color: #fff; margin-left: 8px; }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 14px;
+            color: #aaa;
+        }
+        input {
+            width: 100%;
+            padding: 12px;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 14px;
+        }
+        input:focus { outline: none; border-color: #e03030; }
+        .btn {
+            width: 100%;
+            padding: 14px;
+            background: #e03030;
+            border: none;
+            border-radius: 8px;
+            color: #fff;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        .btn:hover { opacity: 0.9; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .error { color: #ff4444; font-size: 13px; margin-top: 10px; }
+        .success { color: #44ff44; font-size: 13px; margin-top: 10px; }
+        .links {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 13px;
+        }
+        .links a {
+            color: #e03030;
+            text-decoration: none;
+            margin: 0 10px;
+        }
+        .mode-toggle {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .mode-toggle button {
+            background: transparent;
+            border: 1px solid #333;
+            color: #aaa;
+            padding: 8px 16px;
+            cursor: pointer;
+            border-radius: 6px;
+            margin: 0 5px;
+        }
+        .mode-toggle button.active {
+            background: #e03030;
+            border-color: #e03030;
+            color: #fff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">
+            <span>⚡</span><span>Lctron</span>
+        </div>
+        
+        <div class="mode-toggle">
+            <button id="loginBtn" class="active">Sign In</button>
+            <button id="registerBtn">Sign Up</button>
+            <button id="forgotBtn">Forgot</button>
+        </div>
+        
+        <form id="authForm">
+            <div id="loginFields">
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="email" required>
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="password" required>
+                </div>
+            </div>
+            
+            <div id="registerFields" style="display:none;">
+                <div class="form-group">
+                    <label>Name</label>
+                    <input type="text" id="regName" required>
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="regEmail" required>
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="regPassword" required>
+                </div>
+                <div class="form-group">
+                    <label>Confirm Password</label>
+                    <input type="password" id="regConfirm" required>
+                </div>
+            </div>
+            
+            <div id="forgotFields" style="display:none;">
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="forgotEmail" required>
+                </div>
+            </div>
+            
+            <button type="submit" class="btn" id="submitBtn">Sign In</button>
+            <div id="message"></div>
+        </form>
+        
+        <div class="links" id="accountLinks" style="display:none;">
+            <a href="#" id="logoutBtn">Sign Out</a>
+            <span id="userInfo"></span>
+        </div>
+    </div>
+
+    <script>
+        const OWNER_EMAIL = 'omariirvin44@gmail.com';
+        const SALT = 'lctron-salt-2024';
+        
+        let currentMode = 'login';
+        let currentUser = null;
+        
+        function hashPassword(password) {
+            return crypto.subtle.digest('SHA-256', new TextEncoder().encode(password + SALT))
+                .then(buf => Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join(''));
+        }
+        
+        function isOwner(email) {
+            return email?.toLowerCase().trim() === OWNER_EMAIL.toLowerCase();
+        }
+        
+        function getUsers() {
+            const users = localStorage.getItem('lctron_users');
+            return users ? JSON.parse(users) : {};
+        }
+        
+        function setUsers(users) {
+            localStorage.setItem('lctron_users', JSON.stringify(users));
+        }
+        
+        function getStoredUser() {
+            const user = localStorage.getItem('lctron_user');
+            return user ? JSON.parse(user) : null;
+        }
+        
+        function setStoredUser(user) {
+            localStorage.setItem('lctron_user', JSON.stringify(user));
+        }
+        
+        function showMessage(text, isError = false) {
+            const msg = document.getElementById('message');
+            msg.textContent = text;
+            msg.className = isError ? 'error' : 'success';
+            setTimeout(() => msg.textContent = '', 5000);
+        }
+        
+        function switchMode(mode) {
+            currentMode = mode;
+            document.querySelectorAll('.mode-toggle button').forEach(b => b.classList.remove('active'));
+            
+            document.getElementById('loginFields').style.display = 'none';
+            document.getElementById('registerFields').style.display = 'none';
+            document.getElementById('forgotFields').style.display = 'none';
+            
+            const submitBtn = document.getElementById('submitBtn');
+            
+            if (mode === 'login') {
+                document.getElementById('loginBtn').classList.add('active');
+                document.getElementById('loginFields').style.display = 'block';
+                submitBtn.textContent = 'Sign In';
+            } else if (mode === 'register') {
+                document.getElementById('registerBtn').classList.add('active');
+                document.getElementById('registerFields').style.display = 'block';
+                submitBtn.textContent = 'Create Account';
+            } else if (mode === 'forgot') {
+                document.getElementById('forgotBtn').classList.add('active');
+                document.getElementById('forgotFields').style.display = 'block';
+                submitBtn.textContent = 'Send Reset Code';
+            }
+            
+            showMessage('');
+        }
+        
+        async function handleLogin(e) {
+            e.preventDefault();
+            const email = document.getElementById('email').value.toLowerCase().trim();
+            const password = document.getElementById('password').value;
+            
+            const users = getUsers();
+            const user = users[email];
+            
+            if (!user) {
+                showMessage('No account found with this email.', true);
+                return;
+            }
+            
+            const hash = await hashPassword(password);
+            if (user.password !== hash) {
+                showMessage('Incorrect password.', true);
+                return;
+            }
+            
+            const userData = {
+                username: user.name,
+                email: user.email,
+                isPremium: isOwner(email) || user.isPremium,
+                picture: user.picture || null
+            };
+            
+            setStoredUser(userData);
+            currentUser = userData;
+            updateUI();
+            showMessage('Login successful!');
+        }
+        
+        async function handleRegister(e) {
+            e.preventDefault();
+            const name = document.getElementById('regName').value.trim();
+            const email = document.getElementById('regEmail').value.toLowerCase().trim();
+            const password = document.getElementById('regPassword').value;
+            const confirm = document.getElementById('regConfirm').value;
+            
+            if (name.length < 3) {
+                showMessage('Name must be at least 3 characters.', true);
+                return;
+            }
+            
+            if (password.length < 6) {
+                showMessage('Password must be at least 6 characters.', true);
+                return;
+            }
+            
+            if (password !== confirm) {
+                showMessage('Passwords do not match.', true);
+                return;
+            }
+            
+            const users = getUsers();
+            if (users[email]) {
+                showMessage('An account with this email already exists.', true);
+                return;
+            }
+            
+            const hash = await hashPassword(password);
+            users[email] = {
+                name,
+                email,
+                password: hash,
+                isPremium: isOwner(email),
+                createdAt: new Date().toISOString(),
+                picture: null
+            };
+            
+            setUsers(users);
+            
+            const userData = {
+                username: name,
+                email,
+                isPremium: isOwner(email),
+                picture: null
+            };
+            
+            setStoredUser(userData);
+            currentUser = userData;
+            updateUI();
+            showMessage('Account created successfully!');
+        }
+        
+        function handleForgot(e) {
+            e.preventDefault();
+            const email = document.getElementById('forgotEmail').value.toLowerCase().trim();
+            
+            const users = getUsers();
+            if (!users[email]) {
+                showMessage('No account found with this email.', true);
+                return;
+            }
+            
+            const code = Math.floor(100000 + Math.random() * 900000).toString();
+            showMessage(`Your reset code is: ${code} (dev mode - check console)`, false);
+            console.log(`Reset code for ${email}: ${code}`);
+            
+            // Store code temporarily
+            localStorage.setItem('lctron_reset_code', code);
+            localStorage.setItem('lctron_reset_email', email);
+            localStorage.setItem('lctron_reset_expires', Date.now() + 10 * 60 * 1000);
+            
+            // Switch to code input
+            document.getElementById('forgotFields').innerHTML = `
+                <div class="form-group">
+                    <label>Reset Code</label>
+                    <input type="text" id="resetCode" placeholder="6-digit code" maxlength="6">
+                </div>
+                <div class="form-group">
+                    <label>New Password</label>
+                    <input type="password" id="newPassword" placeholder="Min 6 characters">
+                </div>
+            `;
+            document.getElementById('submitBtn').textContent = 'Reset Password';
+        }
+        
+        async function handleReset(e) {
+            e.preventDefault();
+            const code = document.getElementById('resetCode').value;
+            const newPassword = document.getElementById('newPassword').value;
+            
+            const storedCode = localStorage.getItem('lctron_reset_code');
+            const storedEmail = localStorage.getItem('lctron_reset_email');
+            const expires = parseInt(localStorage.getItem('lctron_reset_expires') || '0');
+            
+            if (!storedCode || !storedEmail || Date.now() > expires) {
+                showMessage('Reset code expired or invalid.', true);
+                switchMode('login');
+                return;
+            }
+            
+            if (code !== storedCode) {
+                showMessage('Invalid code.', true);
+                return;
+            }
+            
+            if (newPassword.length < 6) {
+                showMessage('Password must be at least 6 characters.', true);
+                return;
+            }
+            
+            const users = getUsers();
+            const hash = await hashPassword(newPassword);
+            users[storedEmail].password = hash;
+            setUsers(users);
+            
+            // Clean up
+            localStorage.removeItem('lctron_reset_code');
+            localStorage.removeItem('lctron_reset_email');
+            localStorage.removeItem('lctron_reset_expires');
+            
+            showMessage('Password reset successfully!');
+            switchMode('login');
+        }
+        
+        function updateUI() {
+            if (currentUser) {
+                document.getElementById('authForm').style.display = 'none';
+                document.getElementById('mode-toggle').style.display = 'none';
+                document.getElementById('accountLinks').style.display = 'block';
+                document.getElementById('userInfo').textContent = 
+                    `${currentUser.username} (${currentUser.email}) ${currentUser.isPremium ? '⭐ Premium' : ''}`;
+            } else {
+                document.getElementById('authForm').style.display = 'block';
+                document.getElementById('mode-toggle').style.display = 'flex';
+                document.getElementById('accountLinks').style.display = 'none';
+            }
+        }
+        
+        // Event listeners
+        document.getElementById('loginBtn').onclick = () => switchMode('login');
+        document.getElementById('registerBtn').onclick = () => switchMode('register');
+        document.getElementById('forgotBtn').onclick = () => switchMode('forgot');
+        
+        document.getElementById('authForm').onsubmit = (e) => {
+            if (currentMode === 'login') handleLogin(e);
+            else if (currentMode === 'register') handleRegister(e);
+            else if (document.getElementById('resetCode')) handleReset(e);
+            else handleForgot(e);
+        };
+        
+        document.getElementById('logoutBtn').onclick = (e) => {
+            e.preventDefault();
+            localStorage.removeItem('lctron_user');
+            currentUser = null;
+            updateUI();
+            showMessage('Signed out successfully!');
+        };
+        
+        // Check for existing session
+        currentUser = getStoredUser();
+        updateUI();
+    </script>
+</body>
+</html>

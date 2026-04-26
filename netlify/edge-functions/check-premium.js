@@ -1,27 +1,26 @@
 const OWNER_EMAIL = 'omariirvin44@gmail.com';
 const STORE = 'premium-users';
 
+// Manually granted premium users (fallback if API token not available)
+const MANUAL_PREMIUM = [
+  'theunthinkable234@gmail.com',
+];
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
-function getBlobCtx() {
-  const raw = Deno.env.get('NETLIFY_BLOBS_CONTEXT');
-  if (!raw) return null;
-  try {
-    return JSON.parse(atob(raw));
-  } catch {
-    return null;
-  }
-}
-
 async function blobGet(email) {
-  const ctx = getBlobCtx();
-  if (!ctx) return null;
+  const token =
+    Deno.env.get('NETLIFY_API_TOKEN') ||
+    Deno.env.get('Netlify_API_TOKEN') ||
+    '';
+  const siteId = Deno.env.get('NETLIFY_BLOBS_SITE_ID') || 'ab849e15-836d-4b57-9c2f-347b58a40b78';
+  if (!token) return null;
   try {
-    const url = `${ctx.edgeURL}/${ctx.siteID}/${STORE}/${encodeURIComponent(email)}`;
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${ctx.token}` } });
+    const url = `https://api.netlify.com/api/v1/blobs/${siteId}/${STORE}/${encodeURIComponent(email)}`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
     if (res.status === 200) return res.text();
   } catch {
     return null;
@@ -44,7 +43,7 @@ export default async function handler(request) {
     });
   }
 
-  if (email === OWNER_EMAIL.toLowerCase()) {
+  if (email === OWNER_EMAIL.toLowerCase() || MANUAL_PREMIUM.includes(email)) {
     return new Response(JSON.stringify({ premium: true }), {
       headers: { 'Content-Type': 'application/json', ...CORS },
     });
