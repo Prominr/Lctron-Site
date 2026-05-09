@@ -13,6 +13,7 @@ const DEFAULT_SITE_ID = 'ab849e15-836d-4b57-9c2f-347b58a40b78';
 // Manually granted premium users (fallback if API token not available)
 const MANUAL_PREMIUM = [
   'theunthinkable234@gmail.com',
+  'misteryous321@gmail.com',
 ];
 
 const CORS = {

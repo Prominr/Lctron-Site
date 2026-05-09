@@ -10,6 +10,10 @@
 
 const STORE = 'lctron-users';
 const OWNER_EMAIL = 'omariirvin44@gmail.com';
+const MANUAL_PREMIUM = [
+  'theunthinkable234@gmail.com',
+  'misteryous321@gmail.com',
+];
 const SALT = 'lctron-salt-2024';
 const DEFAULT_SITE_ID = 'ab849e15-836d-4b57-9c2f-347b58a40b78';
 const TRIAL_DAYS = 3;
@@ -139,7 +143,7 @@ export default async function handler(request) {
     let existing = await getUser(key);
     if (existing) return json({ success: false, error: 'An account with this email already exists. Try signing in.' });
     const passwordHash = await hashPassword(password);
-    const isPremium = key === OWNER_EMAIL.toLowerCase();
+    const isPremium = key === OWNER_EMAIL.toLowerCase() || MANUAL_PREMIUM.includes(key);
     const user = { name: (name || '').trim() || key.split('@')[0], email: key, passwordHash, isPremium, createdAt: new Date().toISOString() };
     await putUser(key, user);
     return json({ success: true, user: { name: user.name, email: user.email, isPremium, picture: null, createdAt: user.createdAt, trial: computeTrial(user) } });
@@ -183,7 +187,7 @@ export default async function handler(request) {
       }
     }
 
-    const isPremium = key === OWNER_EMAIL.toLowerCase() || !!user.isPremium;
+    const isPremium = key === OWNER_EMAIL.toLowerCase() || MANUAL_PREMIUM.includes(key) || !!user.isPremium;
     return json({ success: true, user: { name: user.name, email: user.email, isPremium, picture: user.picture || null, createdAt: user.createdAt, trial: computeTrial(user) } });
   }
 
@@ -192,13 +196,13 @@ export default async function handler(request) {
     const { email, name, picture } = body;
     if (!email) return json({ success: false, error: 'Email required.' }, 400);
     const key = email.toLowerCase().trim();
-    const isPremium = key === OWNER_EMAIL.toLowerCase();
+    const isPremium = key === OWNER_EMAIL.toLowerCase() || MANUAL_PREMIUM.includes(key);
     let user = await getUser(key);
     if (!user) {
       user = { name: (name || '').trim() || key.split('@')[0], email: key, passwordHash: '', isPremium, picture: picture || null, createdAt: new Date().toISOString() };
       await putUser(key, user);
     } else {
-      // Update picture/name if changed
+      // Update picture/name if changed, and ensure manual premium flag is set
       let changed = false;
       if (picture && user.picture !== picture) { user.picture = picture; changed = true; }
       if (name && user.name !== name) { user.name = name; changed = true; }
